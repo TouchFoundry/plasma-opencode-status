@@ -91,6 +91,12 @@ or real CLI benchmarks. Normal unchanged polls do not even assign the model snap
 The tests also exercise a 10,000-level nested tree without recursive stack growth.
 Run `ctest --test-dir build -V` to see the local measurements.
 
+With Plasma 6.8 development files and Extra CMake Modules installed, configure
+with `-DPLASMA_INTEGRATION_TEST=ON` to also exercise the real Plasma applet loader,
+compact-click expansion and full popup creation. This runs offscreen without
+restarting the desktop. The test checks that `preferredRepresentation` stays
+unset: Plasma's system tray does not select popup applets that force it.
+
 Tests include cancellation and quick pause/resume, timeout/error recovery, incremental
 polling, reconciliation, tree grouping/counts, persistent model identity, and offscreen
 virtualization/keyboard-focus checks. An optional live-server check (GET requests,

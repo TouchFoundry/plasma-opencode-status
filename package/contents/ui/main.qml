@@ -14,7 +14,8 @@ PlasmoidItem {
 
     Plasmoid.icon: "view-process-tree"
     Plasmoid.status: monitor.enabled && monitor.error ? PlasmaCore.Types.NeedsAttentionStatus : PlasmaCore.Types.ActiveStatus
-    preferredRepresentation: compactRepresentation
+    // Leave preferredRepresentation unset: the system tray only activates
+    // popup applets without an explicit preferred representation.
     toolTipMainText: i18n("OpenCode Status")
     toolTipSubText: !monitor.enabled ? i18n("Sync paused — counts are not live") : monitor.error || (available
         ? i18n("%1 active · %2 inactive (including subagents)", tree.activeCount, tree.inactiveCount)
@@ -32,31 +33,12 @@ PlasmoidItem {
     }
     SessionModel { id: tree; snapshot: monitor.snapshot }
 
-    compactRepresentation: PC.ToolButton {
-        implicitWidth: Kirigami.Units.iconSizes.medium
-        implicitHeight: Kirigami.Units.iconSizes.medium
-        text: i18n("OpenCode Status")
-        Accessible.name: root.toolTipSubText
-        onClicked: root.expanded = !root.expanded
-        contentItem: Column {
-            spacing: 0
-            PC.Label {
-                width: parent.width
-                height: parent.height / 2
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: Math.max(9, Math.min(14, parent.height / 2))
-                font.bold: true
-                color: Kirigami.Theme.positiveTextColor
-                text: root.available ? tree.activeCount : "—"
-            }
-            PC.Label {
-                width: parent.width
-                height: parent.height / 2
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: Math.max(9, Math.min(14, parent.height / 2))
-                text: root.available ? tree.inactiveCount : "—"
-            }
-        }
+    compactRepresentation: CompactIndicator {
+        available: root.available
+        activeCount: tree.activeCount
+        inactiveCount: tree.inactiveCount
+        accessibleText: root.toolTipSubText
+        onActivated: root.expanded = !root.expanded
     }
 
     fullRepresentation: ColumnLayout {

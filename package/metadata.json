@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Id": "org.touchfoundry.opencodestatus",
+        "Name": "OpenCode Status",
+        "Description": "Active and inactive OpenCode agents and their subagents",
+        "Icon": "view-process-tree",
+        "Category": "Development Tools",
+        "Version": "0.1.0",
+        "License": "MIT",
+        "Authors": [{ "Name": "TouchFoundry" }],
+        "EnabledByDefault": true
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationArea": true,
+    "X-Plasma-NotificationAreaCategory": "ApplicationStatus"
+}

@@ -1,5 +1,8 @@
 #include "monitor.h"
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -87,6 +90,7 @@ print(json.dumps(result))
         file.close();
         QVERIFY(file.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
         Monitor monitor;
+        monitor.setMaxDays(0);
         monitor.setProperty("executable", path);
         QSignalSpy snapshots(&monitor, &Monitor::snapshotChanged);
         monitor.setEnabled(true);
@@ -140,6 +144,7 @@ print(json.dumps({'data': {}} if sys.argv[3] == '/api/session/active' else {'dat
         QTemporaryDir directory;
         QVERIFY(fixture(directory.path()));
         Monitor monitor;
+        monitor.setMaxDays(0);
         monitor.setProperty("executable", directory.filePath("opencode"));
         QSignalSpy snapshots(&monitor, &Monitor::snapshotChanged);
         monitor.setEnabled(true);
@@ -182,6 +187,7 @@ print(json.dumps({'data': {}} if sys.argv[3] == '/api/session/active' else {'dat
         QTemporaryDir directory;
         QVERIFY(fixture(directory.path()));
         Monitor monitor;
+        monitor.setMaxDays(0);
         monitor.setProperty("executable", directory.filePath("opencode"));
         QSignalSpy snapshots(&monitor, &Monitor::snapshotChanged);
         QVERIFY(!monitor.enabled());
@@ -277,6 +283,7 @@ print(json.dumps(result))
 )PY"));
         QVERIFY(QFile::setPermissions(executable, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
         Monitor monitor;
+        monitor.setMaxDays(0);
         monitor.setProperty("executable", executable);
         QSignalSpy snapshots(&monitor, &Monitor::snapshotChanged);
         monitor.setEnabled(true);
@@ -318,6 +325,76 @@ print(json.dumps(result))
         QVERIFY(monitor.updatedAt().isValid());
         qInfo() << "Live snapshot:" << monitor.snapshot().value("sessions").toList().size()
                 << "sessions," << monitor.snapshot().value("active").toMap().size() << "active";
+    }
+
+    void historyWindow()
+    {
+        QTemporaryDir directory;
+        const auto executable = directory.filePath("opencode");
+        QVERIFY(writeFile(executable, R"PY(#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+base = Path(__file__).parent
+path = sys.argv[3]
+with (base / 'calls').open('a') as log: log.write(path + '\n')
+rows = json.loads((base / 'rows').read_text())
+if path.endswith('/active'):
+    result = {'data': {'running': {'type': 'running'}} if not (base / 'stopped').exists() else {}}
+elif path == '/api/session/running':
+    result = {'data': {'id': 'running', 'time': {'updated': 1}}}
+elif 'cursor=' in path:
+    result = {'data': [], 'cursor': {}}
+else:
+    result = {'data': rows, 'cursor': {'next': 'older'}}
+print(json.dumps(result))
+)PY"));
+        QVERIFY(QFile::setPermissions(executable, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+        const auto now = QDateTime::currentMSecsSinceEpoch();
+        const auto rows = QJsonDocument(QJsonArray{
+            QJsonObject{{"id", "recent"}, {"time", QJsonObject{{"updated", now - 3600000}}}},
+            QJsonObject{{"id", "old"}, {"time", QJsonObject{{"updated", now - 2 * 86400000LL}}}}
+        }).toJson(QJsonDocument::Compact);
+        QVERIFY(writeFile(directory.filePath("rows"), rows));
+        Monitor monitor;
+        QCOMPARE(monitor.maxDays(), 1);
+        monitor.setProperty("executable", executable);
+        monitor.setMaxDays(3);
+        QVERIFY(!QFile::exists(directory.filePath("calls"))); // Settings never unpause Sync.
+        monitor.setMaxDays(1);
+        monitor.setEnabled(true);
+        QTRY_VERIFY(!monitor.busy());
+        QVERIFY2(monitor.error().isEmpty(), qPrintable(monitor.error()));
+        QCOMPARE(monitor.m_cache.size(), 2);
+        QVERIFY(monitor.m_cache.contains("recent"));
+        QVERIFY(monitor.m_cache.contains("running"));
+        QVERIFY(!readFile(directory.filePath("calls")).contains("cursor="));
+
+        monitor.setMaxDays(3); // Widening immediately reconciles and restores history.
+        QTRY_VERIFY(!monitor.busy());
+        QCOMPARE(monitor.m_cache.size(), 3);
+        monitor.setMaxDays(0);
+        QTRY_VERIFY(!monitor.busy());
+        QCOMPARE(monitor.m_cache.size(), 3);
+        monitor.setMaxDays(1);
+        QTRY_VERIFY(!monitor.busy());
+        QCOMPARE(monitor.m_cache.size(), 2);
+
+        // Emulate a cached session aging out between incremental polls.
+        auto recent = monitor.m_cache.value("recent");
+        recent["time"] = QVariantMap{{"updated", now - 2 * 86400000LL}};
+        monitor.m_cache.insert("recent", recent);
+        QVERIFY(writeFile(directory.filePath("rows"), "[]"));
+        QVERIFY(writeFile(directory.filePath("stopped"), "1"));
+        monitor.poll(false);
+        QTRY_VERIFY(!monitor.busy());
+        QVERIFY(monitor.error().isEmpty());
+        QVERIFY(monitor.m_cache.isEmpty()); // A stopped old running session expires too.
+        QVERIFY(monitor.snapshot().value("sessions").toList().isEmpty());
+        monitor.setEnabled(false);
+        const auto calls = readFile(directory.filePath("calls"));
+        monitor.setMaxDays(7);
+        QTest::qWait(50);
+        QCOMPARE(readFile(directory.filePath("calls")), calls);
     }
 };
 

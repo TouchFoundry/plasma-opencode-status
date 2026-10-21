@@ -33,6 +33,12 @@ standalone panel widget. No installation or desktop restart is performed by the 
 In widget settings, set the full path to `opencode` if Plasma's PATH does not
 include it (for example `/home/you/.opencode/bin/opencode`).
 
+**Max days to show** defaults to **1** (the last 24 hours), based on each session's
+last-updated time. Set **0** for all history. Running sessions are always included.
+Changing the window reconciles immediately when Sync is on; expired inactive
+sessions disappear on the next successful sync. A session whose parent is outside
+the window appears as a root.
+
 ## Sync and resource usage
 
 **Sync is off by default.** Open the popup and turn on **Sync** to load sessions.
@@ -54,7 +60,8 @@ When enabled:
   watermark is crossed, including timestamp ties. Active/newly stopped sessions
   absent from those pages are hydrated individually.
 - Initial load, resume, manual Refresh, and the first poll at least **10 minutes**
-  after the last successful reconciliation traverse all history in 1,000-row pages.
+  after the last successful reconciliation traverse the configured history window
+  in 1,000-row pages, stopping once an older session is reached.
   Deletions and edits that do not advance `time.updated` may therefore take until
   reconciliation to appear. Polling is eventually consistent, not an atomic snapshot.
 - Unchanged results do **not** notify/rebuild the tree. Only display fields are
@@ -116,8 +123,9 @@ OPENCODE_LIVE_TEST=1 build/monitor-test liveServer
 - Inactive trees retain subagents and show the server's terminal outcome:
   `succeeded` → Completed, `interrupted` → Stopped, `failed` → Error.
   Sessions without an outcome are Idle. Running overrides an older outcome.
-- All unarchived sessions across projects are included, not just the latest page
-  or the widget's working directory. Archived sessions are omitted unless running.
+- Unarchived sessions within the configured last-activity window across projects
+  are included, not just the latest page or the widget's working directory.
+  Running sessions are included regardless of age. Archived sessions are omitted unless running.
   Missing parents appear as roots.
 - Failed polls preserve the last good tree with an explicit stale-data warning.
   Tray counts become dashes rather than claiming the old counts are current.

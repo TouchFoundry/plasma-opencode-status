@@ -87,6 +87,22 @@ void Monitor::refresh()
     poll(true);
 }
 
+void Monitor::setMaxDays(int days)
+{
+    days = std::clamp(days, 0, 3650);
+    if (m_maxDays == days)
+        return;
+    m_maxDays = days;
+    emit maxDaysChanged();
+    m_reconciled.invalidate();
+    if (m_enabled) {
+        // Reuse pause/resume cancellation so no partial poll with the old window
+        // can publish over the new one. Paused widgets must not start any work.
+        setEnabled(false);
+        setEnabled(true);
+    }
+}
+
 void Monitor::poll(bool full)
 {
     if (!m_enabled || m_busy || m_process.state() != QProcess::NotRunning)
@@ -95,6 +111,7 @@ void Monitor::poll(bool full)
     m_busy = true;
     m_cancelled = false;
     m_full = full || !m_reconciled.isValid() || m_reconciled.elapsed() >= 600000;
+    m_cutoff = m_maxDays ? QDateTime::currentMSecsSinceEpoch() - qint64(m_maxDays) * 86400000 : 0;
     m_pending.clear();
     m_pendingWatermark = m_full ? 0 : m_watermark;
     m_ids.clear();
@@ -145,6 +162,7 @@ void Monitor::finished(int code, QProcess::ExitStatus status)
             return;
         }
         bool crossedWatermark = false;
+        bool crossedCutoff = false;
         for (const auto &value : data.toArray()) {
             const auto session = displaySession(value.toObject());
             const auto id = session.value("id").toString();
@@ -155,6 +173,10 @@ void Monitor::finished(int code, QProcess::ExitStatus status)
             const auto updated = session.value("time").toMap().value("updated").toLongLong();
             crossedWatermark |= updated < m_watermark;
             m_pendingWatermark = std::max(m_pendingWatermark, updated);
+            if (m_cutoff && updated < m_cutoff) {
+                crossedCutoff = true;
+                continue;
+            }
             if (!m_ids.contains(id)) {
                 m_ids.insert(id);
                 m_pending.insert(id, session);
@@ -163,7 +185,7 @@ void Monitor::finished(int code, QProcess::ExitStatus status)
         const auto cursor = object.value("cursor").toObject().value("next").toString();
         // V2 sorts by updated time descending. Include the entire watermark tie group.
         // Reconciliation catches deletions and edits that do not bump updated time.
-        if (!data.toArray().isEmpty() && !cursor.isEmpty() && (m_full || (!crossedWatermark && data.toArray().size() >= 100))) {
+        if (!crossedCutoff && !data.toArray().isEmpty() && !cursor.isEmpty() && (m_full || (!crossedWatermark && data.toArray().size() >= 100))) {
             if (m_cursors.contains(cursor)) {
                 fail(tr("OpenCode returned a repeated pagination cursor."));
                 return;
@@ -243,6 +265,18 @@ void Monitor::complete()
         m_pending.clear();
     }
     m_watermark = m_pendingWatermark;
+    // Sessions can age out even when the server returns no changed display fields.
+    // Keep running agents regardless of age; a newly stopped old agent expires here.
+    if (m_cutoff) {
+        for (auto it = m_cache.begin(); it != m_cache.end();) {
+            if (!m_active.contains(it.key()) && it.value().value("time").toMap().value("updated").toLongLong() < m_cutoff) {
+                it = m_cache.erase(it);
+                changed = true;
+            } else {
+                ++it;
+            }
+        }
+    }
     m_ids.clear();
     m_cursors.clear();
     m_updatedAt = QDateTime::currentDateTime();

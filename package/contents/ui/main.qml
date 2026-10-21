@@ -25,6 +25,7 @@ PlasmoidItem {
         id: monitor
         executable: Plasmoid.configuration.executable
         interval: Plasmoid.configuration.interval
+        maxDays: Plasmoid.configuration.maxDays
         Component.onCompleted: enabled = Plasmoid.configuration.syncEnabled
     }
     Connections {

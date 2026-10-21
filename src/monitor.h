@@ -15,6 +15,7 @@ class Monitor : public QObject
     QML_ELEMENT
     Q_PROPERTY(QString executable MEMBER m_executable NOTIFY executableChanged)
     Q_PROPERTY(int interval READ interval WRITE setInterval NOTIFY intervalChanged)
+    Q_PROPERTY(int maxDays READ maxDays WRITE setMaxDays NOTIFY maxDaysChanged)
     Q_PROPERTY(QVariantMap snapshot READ snapshot NOTIFY snapshotChanged)
     Q_PROPERTY(QString error READ error NOTIFY stateChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
@@ -27,6 +28,8 @@ public:
     ~Monitor() override;
     int interval() const { return m_interval; }
     void setInterval(int seconds);
+    int maxDays() const { return m_maxDays; }
+    void setMaxDays(int days);
     QVariantMap snapshot() const { return m_snapshot; }
     QString error() const { return m_error; }
     bool busy() const { return m_busy; }
@@ -39,6 +42,7 @@ public:
 signals:
     void executableChanged();
     void intervalChanged();
+    void maxDaysChanged();
     void snapshotChanged();
     void stateChanged();
     void enabledChanged();
@@ -64,6 +68,8 @@ private:
     bool m_full = true;
     int m_failures = 0;
     int m_interval = 30;
+    int m_maxDays = 1;
+    qint64 m_cutoff = 0;
     QDateTime m_updatedAt;
     QElapsedTimer m_reconciled;
     qint64 m_watermark = 0;

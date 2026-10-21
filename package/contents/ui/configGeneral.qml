@@ -5,6 +5,7 @@ import org.kde.kirigami as Kirigami
 Kirigami.FormLayout {
     property alias cfg_executable: executable.text
     property alias cfg_interval: interval.value
+    property alias cfg_maxDays: maxDays.value
     TextField {
         id: executable
         Kirigami.FormData.label: i18n("OpenCode executable:")
@@ -16,8 +17,10 @@ Kirigami.FormLayout {
         from: 10
         to: 3600
     }
-    Label {
-        text: i18n("Uses the official CLI for server discovery and authentication. No credentials are stored by this widget.")
-        wrapMode: Text.Wrap
+    SpinBox {
+        id: maxDays
+        Kirigami.FormData.label: i18n("Max days to show (0 = all):")
+        from: 0
+        to: 3650
     }
 }
